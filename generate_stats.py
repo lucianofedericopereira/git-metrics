@@ -224,15 +224,36 @@ class GitHubStatsGenerator:
 
 class MetricsStyleSVGGenerator:
     LANGUAGE_COLORS = {
-        'Python': '#3572A5', 'JavaScript': '#f1e05a', 'TypeScript': '#2b7489',
-        'Java': '#b07219', 'C': '#555555', 'C++': '#f34b7d', 'C#': '#178600',
-        'Go': '#00ADD8', 'Rust': '#dea584', 'PHP': '#4F5D95', 'Ruby': '#701516',
-        'Swift': '#ffac45', 'Kotlin': '#F18E33', 'HTML': '#e34c26', 'CSS': '#563d7c',
-        'Shell': '#89e051', 'Vim Script': '#199f4b', 'Lua': '#000080',
-        'Dart': '#00B4AB', 'Dockerfile': '#384d54', 'Vim script': '#199f4b',
-        'Blade': '#f7523f', 'Batchfile': '#C1F12E', 'M4': '#d4dcd8',
-        'Smarty': '#f0da50', 'Makefile': '#427819', 'SCSS': '#c6538c',
-        'Vue': '#41b883', 'Perl': '#0298c3', 'R': '#198CE7', 'Scala': '#c22d40'
+        'Batchfile':   '#B7C84F',
+        'Blade':       '#C45A4A',
+        'C':           '#6A6A6A',
+        'C#':          '#3C7A3F',
+        'C++':         '#C45A78',
+        'CSS':         '#5A4A8A',
+        'Dart':        '#3AA8A0',
+        'Dockerfile':  '#4A5A6A',
+        'Go':          '#4FB7C8',
+        'HTML':        '#C45A3A',
+        'Java':        '#A06A3B',
+        'JavaScript':  '#D8C04A',
+        'Kotlin':      '#D47A3C',
+        'Lua':         '#2A3A7A',
+        'M4':          '#C8C8C0',
+        'Makefile':    '#4A6A3A',
+        'PHP':         '#6A6FA0',
+        'Perl':        '#3A8AA8',
+        'Python':      '#4A90A4',
+        'R':           '#4A7AC8',
+        'Ruby':        '#8A2E2E',
+        'Rust':        '#C9A27A',
+        'SCSS':        '#B45A8A',
+        'Scala':       '#A83A3A',
+        'Shell':       '#7BAF5A',
+        'Smarty':      '#D8C85A',
+        'Swift':       '#D88A4A',
+        'TypeScript':  '#3E7FA8',
+        'Vim Script':  '#3F8A5A',
+        'Vue':         '#4A9A78'
     }
 
     def __init__(self, custom_css=''):
