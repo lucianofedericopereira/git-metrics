@@ -4,10 +4,14 @@ import sys
 import requests
 import json
 import base64
-from datetime import datetime
+import colorsys
+import hashlib
+from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 import argparse
 from io import BytesIO
+from language_colors import OFFICIAL_LANGUAGE_COLORS
 try:
     from cairosvg import svg2png
     CAIROSVG_AVAILABLE = True
@@ -15,8 +19,50 @@ except ImportError:
     CAIROSVG_AVAILABLE = False
 
 
+# Contribution-grid colours: empty + 4 intensities (GitHub green, matches the original strip).
+GRID_LEVELS = ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"]
+
+
+def fmt_num(n: int) -> str:
+    """Format an integer using '.' as the thousands separator (e.g. 12345 -> '12.345')."""
+    return f"{n:,}".replace(",", ".")
+
+
+def level_for_count(count: int, max_count: int) -> int:
+    """Map a daily contribution count to an intensity level 0-4 (harvested from contrib-main)."""
+    if count <= 0 or max_count <= 0:
+        return 0
+    ratio = count / max_count
+    if ratio <= 0.25:
+        return 1
+    if ratio <= 0.5:
+        return 2
+    if ratio <= 0.75:
+        return 3
+    return 4
+
+
+def load_token(cli_token: Optional[str] = None) -> Optional[str]:
+    """Resolve a GitHub token from CLI arg, env, or ~/.config (harvested from contrib-main).
+
+    Order: --token > GITHUB_TOKEN/REDIRECT_GITHUB_TOKEN env > ~/.config/github-token.txt
+    """
+    if cli_token:
+        return cli_token.strip()
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("REDIRECT_GITHUB_TOKEN")
+    if token:
+        return token.strip()
+    token_path = os.path.expanduser("~/.config/github-token.txt")
+    try:
+        with open(token_path, "r", encoding="utf-8") as f:
+            token = f.read().strip()
+            return token or None
+    except OSError:
+        return None
+
+
 class GitHubStatsGenerator:
-    def __init__(self, token, username=None):
+    def __init__(self, token: str, username: Optional[str] = None) -> None:
         self.token = token
         self.username = username
         self.headers = {
@@ -28,13 +74,13 @@ class GitHubStatsGenerator:
         if not self.username:
             self.username = self._get_authenticated_user()
 
-    def _get_authenticated_user(self):
+    def _get_authenticated_user(self) -> str:
         """Get the authenticated user's username"""
         response = requests.get(f'{self.base_url}/user', headers=self.headers)
         response.raise_for_status()
-        return response.json()['login']
+        return str(response.json()['login'])
 
-    def get_user_info(self):
+    def get_user_info(self) -> Dict[str, Any]:
         """Fetch comprehensive user information"""
         response = requests.get(f'{self.base_url}/users/{self.username}', headers=self.headers)
         response.raise_for_status()
@@ -69,9 +115,9 @@ class GitHubStatsGenerator:
             'avatar_data': avatar_data
         }
 
-    def get_repositories(self):
+    def get_repositories(self) -> List[Dict[str, Any]]:
         """Fetch all user repositories (including private if authenticated)"""
-        repos = []
+        repos: List[Dict[str, Any]] = []
         page = 1
 
         # Check if we're fetching for the authenticated user
@@ -83,6 +129,7 @@ class GitHubStatsGenerator:
 
         while page <= 10:  # Limit to avoid rate limits
             # Use /user/repos for authenticated user to get private repos
+            params: Dict[str, Any]
             if is_auth_user:
                 endpoint = f'{self.base_url}/user/repos'
                 params = {'page': page, 'per_page': 100, 'visibility': 'all', 'sort': 'updated'}
@@ -101,11 +148,11 @@ class GitHubStatsGenerator:
                 break
         return repos
 
-    def get_detailed_stats(self, author_names=None):
+    def get_detailed_stats(self, author_names: Optional[str] = None) -> Dict[str, Any]:
         """Get detailed statistics"""
         repos = self.get_repositories()
 
-        stats = {
+        stats: Dict[str, Any] = {
             'total_commits': 0,
             'total_prs_opened': 0,
             'total_prs_reviewed': 0,
@@ -141,10 +188,11 @@ class GitHubStatsGenerator:
 
         # Get commit count
         try:
+            commit_params: Dict[str, Any] = {'q': f'author:{self.username}', 'per_page': 1}
             search_response = requests.get(
                 f'{self.base_url}/search/commits',
                 headers={**self.headers, 'Accept': 'application/vnd.github.cloak-preview+json'},
-                params={'q': f'author:{self.username}', 'per_page': 1}
+                params=commit_params
             )
             if search_response.status_code == 200:
                 stats['total_commits'] = search_response.json().get('total_count', 0)
@@ -153,18 +201,20 @@ class GitHubStatsGenerator:
 
         # Get issues and PRs
         try:
+            issue_params: Dict[str, Any] = {'q': f'author:{self.username} type:issue', 'per_page': 1}
             issues_response = requests.get(
                 f'{self.base_url}/search/issues',
                 headers=self.headers,
-                params={'q': f'author:{self.username} type:issue', 'per_page': 1}
+                params=issue_params
             )
             if issues_response.status_code == 200:
                 stats['total_issues_opened'] = issues_response.json().get('total_count', 0)
 
+            pr_params: Dict[str, Any] = {'q': f'author:{self.username} type:pr', 'per_page': 1}
             prs_response = requests.get(
                 f'{self.base_url}/search/issues',
                 headers=self.headers,
-                params={'q': f'author:{self.username} type:pr', 'per_page': 1}
+                params=pr_params
             )
             if prs_response.status_code == 200:
                 stats['total_prs_opened'] = prs_response.json().get('total_count', 0)
@@ -185,10 +235,10 @@ class GitHubStatsGenerator:
 
         return {**stats, 'preferred_license': preferred_license}
 
-    def get_language_stats(self):
+    def get_language_stats(self) -> Tuple[List[Dict[str, Any]], int, int, int]:
         """Calculate language statistics"""
         repos = self.get_repositories()
-        language_bytes = defaultdict(int)
+        language_bytes: Dict[str, int] = defaultdict(int)
         total_files = 0
         total_commits = 0
 
@@ -210,7 +260,7 @@ class GitHubStatsGenerator:
         if total_bytes == 0:
             return [], 0, 0, 0
 
-        language_stats = []
+        language_stats: List[Dict[str, Any]] = []
         for lang, bytes_count in sorted(language_bytes.items(), key=lambda x: x[1], reverse=True):
             percentage = (bytes_count / total_bytes) * 100
             language_stats.append({
@@ -221,63 +271,131 @@ class GitHubStatsGenerator:
 
         return language_stats, total_bytes, total_files, total_commits
 
+    def get_recent_contributions(self, days: int = 14) -> List[int]:
+        """Fetch real daily contribution counts for the last `days` days via the GraphQL API.
+
+        Returns a list of integers (oldest to newest, length `days`). On any failure
+        returns an empty list so the caller can fall back gracefully.
+        """
+        to = datetime.utcnow()
+        frm = to - timedelta(days=days + 7)  # small buffer so the calendar covers the window
+        query = """
+        query($login: String!, $from: DateTime!, $to: DateTime!) {
+          user(login: $login) {
+            contributionsCollection(from: $from, to: $to) {
+              contributionCalendar {
+                weeks { contributionDays { contributionCount date } }
+              }
+            }
+          }
+        }
+        """
+        variables: Dict[str, Any] = {
+            'login': self.username,
+            'from': frm.replace(microsecond=0).isoformat() + 'Z',
+            'to': to.replace(microsecond=0).isoformat() + 'Z',
+        }
+        try:
+            resp = requests.post(
+                'https://api.github.com/graphql',
+                json={'query': query, 'variables': variables},
+                headers={'Authorization': f'Bearer {self.token}'},
+                timeout=20,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            user = data.get('data', {}).get('user')
+            if 'errors' in data or not user:
+                return []
+            weeks = user['contributionsCollection']['contributionCalendar']['weeks']
+        except Exception:
+            print("Warning: Could not fetch contribution calendar", file=sys.stderr)
+            return []
+
+        counts: Dict[str, int] = {}
+        for week in weeks:
+            for day in week.get('contributionDays', []):
+                counts[day['date']] = int(day.get('contributionCount', 0))
+
+        # Take the last `days` calendar days ending today (UTC), oldest to newest.
+        result: List[int] = []
+        for i in range(days - 1, -1, -1):
+            d = (to.date() - timedelta(days=i)).isoformat()
+            result.append(counts.get(d, 0))
+        return result
+
 
 class MetricsStyleSVGGenerator:
-    LANGUAGE_COLORS = {
-        'Batchfile':   '#B7C84F',
-        'Blade':       '#C45A4A',
-        'C':           '#6A6A6A',
-        'C#':          '#3C7A3F',
-        'C++':         '#C45A78',
-        'CSS':         '#5A4A8A',
-        'Dart':        '#3AA8A0',
-        'Dockerfile':  '#4A5A6A',
-        'Go':          '#4FB7C8',
-        'HTML':        '#C45A3A',
-        'Java':        '#A06A3B',
-        'JavaScript':  '#D8C04A',
-        'Kotlin':      '#D47A3C',
-        'Lua':         '#2A3A7A',
-        'M4':          '#C8C8C0',
-        'Makefile':    '#4A6A3A',
-        'PHP':         '#6A6FA0',
-        'Perl':        '#3A8AA8',
-        'Python':      '#4A90A4',
-        'R':           '#4A7AC8',
-        'Ruby':        '#8A2E2E',
-        'Rust':        '#C9A27A',
-        'SCSS':        '#B45A8A',
-        'Scala':       '#A83A3A',
-        'Shell':       '#7BAF5A',
-        'Smarty':      '#D8C85A',
-        'Swift':       '#D88A4A',
-        'TypeScript':  '#3E7FA8',
-        'Vim Script':  '#3F8A5A',
-        'Vue':         '#4A9A78'
-    }
+    # Official GitHub/Linguist language colours live in language_colors.py (the full
+    # ~670-language table). _mute_color() softens them at render time so the card keeps
+    # its muted aesthetic while every language retains its recognisable hue.
+    OFFICIAL_LANGUAGE_COLORS = OFFICIAL_LANGUAGE_COLORS
 
-    def __init__(self, custom_css=''):
+    # Reserved neutral grey for the grouped "Others" segment.
+    OTHERS_COLOR = '#858585'
+
+    def __init__(self, custom_css: str = '') -> None:
         self.custom_css = custom_css
 
-    def get_language_color(self, language):
-        return self.LANGUAGE_COLORS.get(language, '#858585')
+    @staticmethod
+    def _mute_color(hex_color: str) -> str:
+        """Soften a colour toward the card's muted aesthetic, preserving its hue.
 
-    def generate_contribution_grid(self, repos_count):
-        """Generate contribution grid (14 boxes matching original)"""
+        Lowers saturation and clamps brightness to a mid band, so bright official
+        brand colours become muted while staying distinct from one another.
+        """
+        r = int(hex_color[1:3], 16) / 255
+        g = int(hex_color[3:5], 16) / 255
+        b = int(hex_color[5:7], 16) / 255
+        h, s, v = colorsys.rgb_to_hsv(r, g, b)
+        s *= 0.55                       # desaturate
+        v = max(0.42, min(v, 0.74))     # clamp brightness into a muted mid band
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        return '#{:02X}{:02X}{:02X}'.format(int(r * 255), int(g * 255), int(b * 255))
+
+    def get_language_color(self, language: str) -> str:
+        """Return a muted colour for a language.
+
+        Known languages use the official GitHub colour, softened by _mute_color().
+        "Others" stays neutral grey. Anything else gets a deterministic muted colour
+        derived from its name, so two unlisted languages never share a flat grey.
+        """
+        official = self.OFFICIAL_LANGUAGE_COLORS.get(language)
+        if official:
+            return self._mute_color(official)
+        if language == 'Others':
+            return self.OTHERS_COLOR
+        # Deterministic muted colour: stable hue from the name, fixed low saturation.
+        digest = hashlib.md5(language.encode('utf-8')).hexdigest()
+        hue = (int(digest, 16) % 360) / 360.0
+        r, g, b = colorsys.hsv_to_rgb(hue, 0.42, 0.66)
+        return '#{:02X}{:02X}{:02X}'.format(int(r * 255), int(g * 255), int(b * 255))
+
+    def generate_contribution_grid(self, daily_counts: Optional[List[int]]) -> str:
+        """Generate contribution grid (14 boxes) coloured by real daily contribution counts.
+
+        `daily_counts` is a list of ints (oldest to newest). If empty/short it is
+        left-padded with zeros so the strip always renders 14 boxes.
+        """
+        counts = list(daily_counts or [])
+        if len(counts) < 14:
+            counts = [0] * (14 - len(counts)) + counts
+        counts = counts[-14:]
+        max_count = max(counts) if counts else 0
+
         boxes = ''
-        # Use activity colors (no white/empty boxes since user has daily commits)
-        colors = ['#9be9a8', '#40c463', '#30a14e', '#216e39']
-
-        for i in range(14):
-            # Vary intensity across the boxes using only activity colors
-            intensity = (i % 4)
-            color = colors[intensity]
+        for i, count in enumerate(counts):
+            level = level_for_count(count, max_count)
+            color = GRID_LEVELS[level]
             x = 260 + (i * 13)  # More spacing for bigger boxes
             boxes += f'<rect x="{x}" y="18" width="11" height="11" fill="{color}" rx="2"/>'  # Bigger boxes, moved up to name line
 
         return boxes
 
-    def generate_stats_svg(self, user_info, detailed_stats, language_stats, total_bytes, total_files, total_commits):
+    def generate_stats_svg(self, user_info: Dict[str, Any], detailed_stats: Dict[str, Any],
+                           language_stats: List[Dict[str, Any]], total_bytes: int,
+                           total_files: int, total_commits: int,
+                           contribution_days: Optional[List[int]] = None) -> str:
         """Generate SVG matching lowlighter/metrics layout"""
 
         # Avatar with circular clip path
@@ -293,8 +411,8 @@ class MetricsStyleSVGGenerator:
                    href="data:image/png;base64,{user_info["avatar_data"]}"
                    clip-path="url(#avatar-clip)"/>'''
 
-        # Contribution grid
-        contribution_grid = self.generate_contribution_grid(detailed_stats['repos_contributed_to'])
+        # Contribution grid (real recent daily activity)
+        contribution_grid = self.generate_contribution_grid(contribution_days)
 
         # Language progress bar with rounded corners (taller)
         # Show max 8 labels: top 7 languages + "Others" for the rest
@@ -338,14 +456,14 @@ class MetricsStyleSVGGenerator:
             col = i % 4
             row = i // 4
             x = 60 + (col * 110)
-            y = 227 + (row * 16)  # Moved up from 400 to 227
+            y = 134 + (row * 16)  # Sits just below the language bar
             color = self.get_language_color(lang['name'])
             lang_items += f'''
             <circle cx="{x}" cy="{y}" r="5" fill="{color}"/>
             <text x="{x + 10}" y="{y + 4}" class="lang-item">{lang['name']}</text>'''
 
         svg_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="480" height="280" viewBox="0 0 480 280">
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="170" viewBox="0 0 480 170">
     <defs>
         <style>
             * {{
@@ -378,7 +496,7 @@ class MetricsStyleSVGGenerator:
     </defs>
 
     <!-- Background (transparent) -->
-    <rect width="480" height="280" fill="none"/>
+    <rect width="480" height="170" fill="none"/>
 
     <!-- Profile Picture -->
     {avatar_img}
@@ -390,24 +508,13 @@ class MetricsStyleSVGGenerator:
     {contribution_grid}
     <text x="260" y="42" class="subtext" style="font-size: 11px;">Contributed to {detailed_stats['repos_contributed_to']} repositories</text>
 
-    <text x="20" y="65" class="subtext">{detailed_stats['total_commits']:,} commits since joining GitHub {user_info['months_ago']} months ago</text>
-    <text x="20" y="83" class="subtext">Followed by {user_info['followers']:,} users · {detailed_stats['sponsors']:,} sponsors · {detailed_stats['total_stars']:,} stargazers · {detailed_stats['total_forks']:,} forkers · {detailed_stats['total_watchers']:,} watchers</text>
-
-    <!-- Activity Section -->
-    <text x="20" y="113" class="section-title">Activity</text>
-    <text x="260" y="113" class="section-title">{user_info['public_repos']} Repositories</text>
-
-    <text x="20" y="135" class="stat-line">{detailed_stats['total_commits']:,} Commits</text>
-    <text x="260" y="135" class="stat-line">Prefers {detailed_stats['preferred_license']} license</text>
-
-    <text x="20" y="153" class="stat-line">{detailed_stats['total_prs_opened']:,} Pull requests opened</text>
-    <text x="260" y="153" class="stat-line">{int(detailed_stats['total_size_kb'] / 1024)} MB used</text>
+    <text x="20" y="65" class="subtext">{fmt_num(detailed_stats['total_commits'])} Commits, {fmt_num(detailed_stats['total_stars'])} stargazers since joining GitHub {user_info['months_ago']} months ago</text>
 
     <!-- Languages Section -->
-    <text x="20" y="188" class="section-title">{len(language_stats)} Languages</text>
+    <text x="20" y="95" class="section-title">{len(language_stats)} Languages</text>
 
     <!-- Language progress bar -->
-    <g transform="translate(10, 205)">
+    <g transform="translate(10, 112)">
         {lang_bars}
     </g>
 
@@ -418,7 +525,7 @@ class MetricsStyleSVGGenerator:
         return svg_content
 
 
-def convert_svg_to_png(svg_content, output_path, scale=2):
+def convert_svg_to_png(svg_content: str, output_path: str, scale: float = 2) -> None:
     """Convert SVG to PNG"""
     if not CAIROSVG_AVAILABLE:
         raise ImportError("cairosvg required for PNG. Install: pip install cairosvg")
@@ -427,9 +534,9 @@ def convert_svg_to_png(svg_content, output_path, scale=2):
     svg2png(bytestring=svg_content.encode('utf-8'), write_to=output_path, scale=scale)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='Generate GitHub statistics (metrics-style)')
-    parser.add_argument('--token', required=True, help='GitHub personal access token')
+    parser.add_argument('--token', help='GitHub personal access token (falls back to $GITHUB_TOKEN or ~/.config/github-token.txt)')
     parser.add_argument('--username', help='GitHub username')
     parser.add_argument('--output', default='stats.png', help='Output file (.svg or .png)')
     parser.add_argument('--format', choices=['svg', 'png'], help='Output format')
@@ -445,9 +552,15 @@ def main():
         print("Error: PNG requires cairosvg. Install: pip install cairosvg", file=sys.stderr)
         sys.exit(1)
 
+    token = load_token(args.token)
+    if not token:
+        print("Error: no GitHub token found. Pass --token, set $GITHUB_TOKEN, "
+              "or create ~/.config/github-token.txt", file=sys.stderr)
+        sys.exit(1)
+
     print(f"Fetching stats for {args.username or 'authenticated user'}...")
 
-    stats_gen = GitHubStatsGenerator(args.token, args.username)
+    stats_gen = GitHubStatsGenerator(token, args.username)
 
     print("Fetching user info...")
     user_info = stats_gen.get_user_info()
@@ -458,10 +571,14 @@ def main():
     print("Analyzing languages...")
     language_stats, total_bytes, total_files, total_commits = stats_gen.get_language_stats()
 
+    print("Fetching recent contributions...")
+    contribution_days = stats_gen.get_recent_contributions(days=14)
+
     print("Generating image...")
     svg_gen = MetricsStyleSVGGenerator(args.custom_css)
     svg_content = svg_gen.generate_stats_svg(user_info, detailed_stats, language_stats,
-                                             total_bytes, total_files, total_commits)
+                                             total_bytes, total_files, total_commits,
+                                             contribution_days=contribution_days)
 
     output_path = args.output
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)

@@ -31,6 +31,10 @@ jobs:
         run: pip install -r git-metrics-to-svg/requirements.txt
 
       - name: Generate GitHub statistics
+        # The contribution grid uses the GraphQL contributions calendar. The default
+        # secrets.GITHUB_TOKEN returns public contributions only; for a complete grid
+        # (incl. private activity), create a PAT with read:user and store it as a secret,
+        # e.g. --token ${{ secrets.METRICS_TOKEN }}
         run: |
           python git-metrics-to-svg/generate_stats.py \
             --token ${{ secrets.GITHUB_TOKEN }} \

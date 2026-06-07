@@ -1,0 +1,80 @@
+name: 'Git Metrics'
+description: 'Generate a GitHub stats card (SVG or PNG) with a real contribution strip and language breakdown.'
+author: 'lucianofedericopereira'
+branding:
+  icon: 'bar-chart-2'
+  color: 'blue'
+
+inputs:
+  token:
+    description: >-
+      GitHub token. The default GITHUB_TOKEN works for public data; use a PAT with
+      read:user if you want private activity reflected in the contribution strip.
+    required: true
+  username:
+    description: 'GitHub username to analyze (defaults to the authenticated user).'
+    required: false
+    default: ''
+  output:
+    description: 'Output file path (.svg or .png).'
+    required: false
+    default: 'stats.svg'
+  format:
+    description: 'Output format: svg or png. Auto-detected from the output extension if omitted.'
+    required: false
+    default: ''
+  custom-css:
+    description: 'Custom CSS injected into the generated SVG.'
+    required: false
+    default: ''
+  author-names:
+    description: 'Comma-separated author names/emails for commit attribution.'
+    required: false
+    default: ''
+  scale:
+    description: 'PNG scale factor (higher = sharper). Ignored for SVG.'
+    required: false
+    default: '2.0'
+  python-version:
+    description: 'Python version to set up for the run.'
+    required: false
+    default: '3.x'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install cairo (PNG output only)
+      if: ${{ inputs.format == 'png' || endsWith(inputs.output, '.png') }}
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y libcairo2
+
+    - name: Install Python dependencies
+      shell: bash
+      run: pip install -r "${{ github.action_path }}/requirements.txt"
+
+    - name: Generate stats
+      shell: bash
+      env:
+        # Pass inputs via env (not direct ${{ }} interpolation) to avoid script injection.
+        INPUT_TOKEN: ${{ inputs.token }}
+        INPUT_USERNAME: ${{ inputs.username }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_CUSTOM_CSS: ${{ inputs.custom-css }}
+        INPUT_AUTHOR_NAMES: ${{ inputs.author-names }}
+        INPUT_SCALE: ${{ inputs.scale }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -e
+        args=(--token "$INPUT_TOKEN" --output "$INPUT_OUTPUT")
+        if [ -n "$INPUT_USERNAME" ]; then args+=(--username "$INPUT_USERNAME"); fi
+        if [ -n "$INPUT_FORMAT" ]; then args+=(--format "$INPUT_FORMAT"); fi
+        if [ -n "$INPUT_CUSTOM_CSS" ]; then args+=(--custom-css "$INPUT_CUSTOM_CSS"); fi
+        if [ -n "$INPUT_AUTHOR_NAMES" ]; then args+=(--author-names "$INPUT_AUTHOR_NAMES"); fi
+        if [ -n "$INPUT_SCALE" ]; then args+=(--scale "$INPUT_SCALE"); fi
+        python "$ACTION_PATH/generate_stats.py" "${args[@]}"

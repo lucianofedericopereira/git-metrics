@@ -11,7 +11,7 @@ Usage:
 import os
 import sys
 
-def main():
+def main() -> None:
     print("=" * 60)
     print("GitHub Stats Generator - Local Test")
     print("=" * 60)
@@ -113,7 +113,7 @@ def main():
     # Run the command
     import subprocess
     try:
-        result = subprocess.run(cmd_parts, check=True)
+        subprocess.run(cmd_parts, check=True)
 
         print()
         print("=" * 60)
@@ -161,7 +161,7 @@ def main():
                 elif system == "Darwin":  # macOS
                     subprocess.run(["open", output_file])
                 elif system == "Windows":
-                    os.startfile(output_file)
+                    os.startfile(output_file)  # type: ignore[attr-defined]  # Windows-only
 
     except subprocess.CalledProcessError as e:
         print()

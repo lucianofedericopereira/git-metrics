@@ -35,9 +35,61 @@ python generate_stats.py \
   --format png
 ```
 
-### GitHub Actions Integration
+### Use as a GitHub Action (recommended)
 
-Add this workflow to `.github/workflows/update-stats.yml`:
+The simplest way to consume this from your own profile repo — no fork, no checkout
+plumbing. Add a workflow that references this repo with `uses:`:
+
+```yaml
+name: Update GitHub Stats
+on:
+  schedule:
+    - cron: "0 0 * * *"  # Daily at midnight
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate stats
+        uses: lucianofedericopereira/git-metrics@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # use a PAT with read:user for private activity
+          username: your-username
+          output: assets/stats.png
+          format: png
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/stats.png
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update stats [skip ci]"
+          git push
+```
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `token` | Yes | - | GitHub token (default `GITHUB_TOKEN` = public data; PAT with `read:user` for private) |
+| `username` | No | authenticated user | GitHub username to analyze |
+| `output` | No | `stats.svg` | Output file path (`.svg` or `.png`) |
+| `format` | No | auto from extension | `svg` or `png` |
+| `custom-css` | No | `''` | Custom CSS injected into the SVG |
+| `author-names` | No | `''` | Comma-separated author names/emails |
+| `scale` | No | `2.0` | PNG scale factor |
+| `python-version` | No | `3.x` | Python version to set up |
+
+> Pin to a tag (e.g. `@v1`) instead of `@main` for reproducible builds.
+
+### GitHub Actions Integration (checkout-and-run)
+
+Alternatively, check the script out and run it directly. Add this workflow to
+`.github/workflows/update-stats.yml`:
 
 ```yaml
 name: Update GitHub Stats
