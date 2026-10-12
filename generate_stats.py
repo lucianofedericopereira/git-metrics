@@ -424,7 +424,7 @@ class MetricsStyleSVGGenerator:
     .empty   {{ fill: #ebedf0; }}
     @media (prefers-color-scheme: dark) {{
       .primary {{ fill: #f0f6fc; }}
-      .muted   {{ fill: #a6a39b; }}
+      .muted   {{ fill: #b1aea7; }}
       .empty   {{ fill: #2d333b; }}
     }}
 
@@ -440,15 +440,15 @@ class MetricsStyleSVGGenerator:
   <!-- HEADER -->
   <g class="{rise}a1">{avatar_img}
     <text class="sans primary" x="{name_x}" y="52" font-size="24">{name}</text>{contribution_grid}
-    <text class="sans muted" x="{self.RIGHT}" y="66" font-size="15" text-anchor="end">Contributed to {detailed_stats['repos_contributed_to']} repositories</text>
+    <text class="sans muted" x="{self.RIGHT}" y="66" font-size="15" text-anchor="end">Contributed to <tspan class="primary">{detailed_stats['repos_contributed_to']}</tspan> repositories</text>
   </g>
   <!-- SUMMARY -->
   <g class="{rise}a2">
-    <text class="sans muted" x="{self.LEFT}" y="116" font-size="16">{commits} Commits, {stars} stargazers since joining GitHub {user_info['months_ago']} months ago</text>
+    <text class="sans muted" x="{self.LEFT}" y="116" font-size="16"><tspan class="primary">{commits}</tspan> Commits, <tspan class="primary">{stars}</tspan> stargazers since joining GitHub <tspan class="primary">{user_info['months_ago']}</tspan> months ago</text>
   </g>
   <!-- LANGUAGES -->
   <g class="{rise}a3">
-    <text class="sans muted" x="{self.LEFT}" y="168" font-size="24">{len(language_stats)} Languages</text>
+    <text class="sans muted" x="{self.LEFT}" y="168" font-size="24"><tspan class="primary">{len(language_stats)}</tspan> Languages</text>
     <clipPath id="lang-bar"><rect x="{self.LEFT}" y="{bar_y}" width="{bar_w}" height="{bar_h}" rx="{bar_h // 2}"/></clipPath>
     <g clip-path="url(#lang-bar)">
       <rect class="empty" x="{self.LEFT}" y="{bar_y}" width="{bar_w}" height="{bar_h}"/>{segments}
