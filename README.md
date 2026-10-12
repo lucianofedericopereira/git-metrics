@@ -182,8 +182,8 @@ python generate_stats.py \
 ### Available CSS Classes
 
 - `.sans` - Font stack for all text
-- `.primary` - Name and language names (`#24292f`, dark `#dfe2e2`)
-- `.muted` - Secondary text: repo count, summary, section title, percentages (`#969289`)
+- `.primary` - Name and language names (`#1f2328`, dark `#f0f6fc`)
+- `.muted` - Secondary text: repo count, summary, section title, percentages (`#57544e`, dark `#a6a39b`)
 - `.empty` - Empty contribution boxes and the language bar track (`#ebedf0`, dark `#2d333b`)
 - `.rise`, `.a1`-`.a3` - Fade-in animation on the header, summary and languages groups (SVG only)
 

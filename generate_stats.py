@@ -419,11 +419,12 @@ class MetricsStyleSVGGenerator:
         return f'''<svg viewBox="0 0 {self.WIDTH} {height}" width="{self.WIDTH}" height="{height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GitHub metrics — {name}: {commits} commits, {len(language_stats)} languages">
   <style>
     .sans {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", "DejaVu Sans", Helvetica, Arial, sans-serif; }}
-    .primary {{ fill: #24292f; }}
-    .muted   {{ fill: #969289; }}
+    .primary {{ fill: #1f2328; }}
+    .muted   {{ fill: #57544e; }}
     .empty   {{ fill: #ebedf0; }}
     @media (prefers-color-scheme: dark) {{
-      .primary {{ fill: #dfe2e2; }}
+      .primary {{ fill: #f0f6fc; }}
+      .muted   {{ fill: #a6a39b; }}
       .empty   {{ fill: #2d333b; }}
     }}
 
