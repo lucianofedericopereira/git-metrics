@@ -20,15 +20,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Checkout git-metrics
+        uses: actions/checkout@v7
+        with:
+          repository: lucianofedericopereira/git-metrics
+          path: git-metrics
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install -r git-metrics-to-svg/requirements.txt
+        run: pip install -r git-metrics/requirements.txt
 
       - name: Generate GitHub statistics
         # The contribution grid uses the GraphQL contributions calendar. The default
@@ -36,15 +42,14 @@ jobs:
         # (incl. private activity), create a PAT with read:user and store it as a secret,
         # e.g. --token ${{ secrets.METRICS_TOKEN }}
         run: |
-          python git-metrics-to-svg/generate_stats.py \
+          python git-metrics/generate_stats.py \
             --token ${{ secrets.GITHUB_TOKEN }} \
-            --output assets/stats.png \
-            --format png
+            --output assets/stats.svg
 
       - name: Commit and push if changed
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add assets/stats.png
+          git add assets/stats.svg
           git diff --quiet && git diff --staged --quiet || git commit -m "Update GitHub stats"
           git push

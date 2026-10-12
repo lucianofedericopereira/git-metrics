@@ -7,6 +7,8 @@ A lightweight Python script to generate GitHub statistics as customizable SVG or
 - Fetches GitHub user statistics via API
 - Analyzes language usage across all repositories
 - Generates clean, customizable SVG or PNG output
+- SVG follows the viewer's light/dark theme and fades in (respects reduced motion)
+- 14-day contribution strip of complete days, shaded by quartile
 - Supports custom CSS styling
 - In-depth language analysis
 - Lightweight with minimal dependencies
@@ -54,21 +56,20 @@ jobs:
   stats:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate stats
         uses: lucianofedericopereira/git-metrics@main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}   # use a PAT with read:user for private activity
           username: your-username
-          output: assets/stats.png
-          format: png
+          output: assets/stats.svg
 
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add assets/stats.png
+          git add assets/stats.svg
           git diff --quiet && git diff --staged --quiet || git commit -m "Update stats [skip ci]"
           git push
 ```
@@ -80,8 +81,9 @@ jobs:
 | `output` | No | `stats.svg` | Output file path (`.svg` or `.png`) |
 | `format` | No | auto from extension | `svg` or `png` |
 | `custom-css` | No | `''` | Custom CSS injected into the SVG |
-| `author-names` | No | `''` | Comma-separated author names/emails |
+| `author-names` | No | `''` | Deprecated, ignored (commits already match every email linked to the account) |
 | `scale` | No | `2.0` | PNG scale factor |
+| `merge-languages` | No | `''` | Count one language as another, e.g. `Blade=PHP,Twig=PHP` |
 | `python-version` | No | `3.x` | Python version to set up |
 
 > Pin to a tag (e.g. `@v1`) instead of `@main` for reproducible builds.
@@ -107,25 +109,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Checkout git-metrics
+        uses: actions/checkout@v7
+        with:
+          repository: lucianofedericopereira/git-metrics
+          path: git-metrics
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install -r git-metrics-to-svg/requirements.txt
+        run: pip install -r git-metrics/requirements.txt
 
       - name: Generate stats
         run: |
-          python git-metrics-to-svg/generate_stats.py \
+          python git-metrics/generate_stats.py \
             --token ${{ secrets.GITHUB_TOKEN }} \
-            --output assets/stats.svg \
-            --custom-css "h1.field, h1 span { color: #bab7b1!important }
-            h2.field, h3.field { color: #969289!important }
-            .field svg { fill:#969289!important }
-            footer {display: none!important}"
+            --output assets/stats.svg
 
       - name: Commit changes
         run: |
@@ -148,7 +152,8 @@ jobs:
 | `--format` | No | Auto-detected | Output format: `svg` or `png` |
 | `--scale` | No | `2.0` | Scale factor for PNG output (higher = better quality) |
 | `--custom-css` | No | `''` | Custom CSS to style the SVG |
-| `--author-names` | No | - | Comma-separated author names for commit counting |
+| `--author-names` | No | - | Deprecated, ignored (commits already match every email linked to the account) |
+| `--merge-languages` | No | `''` | Count one language as another, e.g. `Blade=PHP,Twig=PHP` |
 
 ### GitHub Token
 
@@ -164,31 +169,25 @@ For GitHub Actions, use the built-in `${{ secrets.GITHUB_TOKEN }}` which has the
 
 ### Custom CSS Styling
 
-The `--custom-css` parameter allows you to customize the appearance of your stats SVG:
+The `--custom-css` parameter is appended to the SVG's `<style>`, after the defaults, so
+plain rules override them. Text is SVG, so colour it with `fill`, not `color`:
 
 ```bash
 python generate_stats.py \
   --token YOUR_TOKEN \
-  --custom-css "
-    h1.field, h1 span { color: #bab7b1!important }
-    h2.field, h3.field { color: #969289!important }
-    .field svg { fill:#969289!important }
-    footer {display: none!important }
-  "
+  --custom-css ".primary { fill: #bab7b1 } .muted { fill: #969289 }
+    @media (prefers-color-scheme: dark) { .primary { fill: #ebdbb2 } }"
 ```
 
 ### Available CSS Classes
 
-- `.container` - Main container
-- `h1.field` - Main heading
-- `h2.field`, `h3.field` - Section headings
-- `.stats-grid` - Stats grid layout
-- `.stat-item` - Individual stat boxes
-- `.stat-label` - Stat labels
-- `.stat-value` - Stat values
-- `.language-item` - Language list items
-- `.language-name` - Language names
-- `.language-percentage` - Language percentages
+- `.sans` - Font stack for all text
+- `.primary` - Name and language names (`#24292f`, dark `#dfe2e2`)
+- `.muted` - Secondary text: repo count, summary, section title, percentages (`#969289`)
+- `.empty` - Empty contribution boxes and the language bar track (`#ebedf0`, dark `#2d333b`)
+- `.rise`, `.a1`-`.a3` - Fade-in animation on the header, summary and languages groups (SVG only)
+
+PNG output is rendered by cairosvg, which ignores `@media`, so a PNG always uses the light palette.
 
 ## Examples
 
@@ -228,12 +227,12 @@ python generate_stats.py \
   --scale 3.0
 ```
 
-### Example 5: With Author Attribution
+### Example 5: Count Blade as PHP
 
 ```bash
 python generate_stats.py \
   --token ghp_xxxxxxxxxxxxx \
-  --author-names "John Doe, johndoe, john.doe@example.com" \
+  --merge-languages "Blade=PHP" \
   --output stats.svg
 ```
 
@@ -241,15 +240,15 @@ python generate_stats.py \
 
 The generated image (SVG or PNG) includes:
 
-- **Public Repositories** - Total number of public repos
-- **Followers** - Number of followers
-- **Following** - Number of users you follow
-- **Public Gists** - Number of public gists
-- **Most Used Languages** - Top 8 languages by bytes of code with percentages
+- **Avatar and name**
+- **Contribution strip** - Daily contributions for the last 14 complete days (UTC)
+- **Repositories** - Number of repositories contributed to
+- **Commits and stargazers** - With account age in months
+- **Languages** - Total count, a usage bar, and the top 7 by bytes plus "Others", with percentages
 
 ## Comparison with lowlighter/metrics
 
-| Feature | git-metrics-to-svg | lowlighter/metrics |
+| Feature | git-metrics | lowlighter/metrics |
 |---------|-------------------|-------------------|
 | Setup complexity | Simple Python script | Docker-based action |
 | Customization | Full code access | Configuration options |
@@ -292,9 +291,9 @@ GitHub API has rate limits (5,000 requests/hour for authenticated users). If you
 
 ## Requirements
 
-- Python 3.6+
-- requests 2.31.0+
-- cairosvg 2.7.1+ (for PNG output only)
+- Python 3.10+
+- requests 2.34.2
+- cairosvg 2.9.1 (for PNG output only)
 
 ## License
 

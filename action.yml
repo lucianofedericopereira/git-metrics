@@ -28,7 +28,11 @@ inputs:
     required: false
     default: ''
   author-names:
-    description: 'Comma-separated author names/emails for commit attribution.'
+    description: 'Deprecated and ignored: commits are already matched to every email linked to the account.'
+    required: false
+    default: ''
+  merge-languages:
+    description: 'Count one language as another, comma-separated (e.g. "Blade=PHP,Twig=PHP").'
     required: false
     default: ''
   scale:
@@ -44,7 +48,7 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -66,8 +70,8 @@ runs:
         INPUT_OUTPUT: ${{ inputs.output }}
         INPUT_FORMAT: ${{ inputs.format }}
         INPUT_CUSTOM_CSS: ${{ inputs.custom-css }}
-        INPUT_AUTHOR_NAMES: ${{ inputs.author-names }}
         INPUT_SCALE: ${{ inputs.scale }}
+        INPUT_MERGE_LANGUAGES: ${{ inputs.merge-languages }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
         set -e
@@ -75,6 +79,6 @@ runs:
         if [ -n "$INPUT_USERNAME" ]; then args+=(--username "$INPUT_USERNAME"); fi
         if [ -n "$INPUT_FORMAT" ]; then args+=(--format "$INPUT_FORMAT"); fi
         if [ -n "$INPUT_CUSTOM_CSS" ]; then args+=(--custom-css "$INPUT_CUSTOM_CSS"); fi
-        if [ -n "$INPUT_AUTHOR_NAMES" ]; then args+=(--author-names "$INPUT_AUTHOR_NAMES"); fi
         if [ -n "$INPUT_SCALE" ]; then args+=(--scale "$INPUT_SCALE"); fi
+        if [ -n "$INPUT_MERGE_LANGUAGES" ]; then args+=(--merge-languages "$INPUT_MERGE_LANGUAGES"); fi
         python "$ACTION_PATH/generate_stats.py" "${args[@]}"

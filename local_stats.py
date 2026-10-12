@@ -68,24 +68,16 @@ def main() -> None:
     # Output format
     print()
     print("Output format:")
-    print("1. PNG (recommended)")
-    print("2. SVG")
+    print("1. SVG (recommended)")
+    print("2. PNG")
     choice = input("Choose format (1 or 2) [1]: ").strip() or "1"
 
     if choice == "1":
-        output_format = "png"
-        output_file = "test-stats.png"
-    else:
         output_format = "svg"
         output_file = "test-stats.svg"
-
-    # Custom CSS (matching your publish.yml config)
-    custom_css = """
-    h1.field, h1 span { color: #bab7b1!important }
-    h2.field, h3.field { color: #969289!important }
-    .field svg { fill:#969289!important }
-    footer {display: none!important }
-    """
+    else:
+        output_format = "png"
+        output_file = "test-stats.png"
 
     # Build command
     cmd_parts = [
@@ -94,15 +86,10 @@ def main() -> None:
         "--token", token,
         "--output", output_file,
         "--format", output_format,
-        "--custom-css", custom_css.strip()
     ]
 
     if username:
         cmd_parts.extend(["--username", username])
-
-    # Author names (matching your config)
-    author_names = "Luciano Pereira, Luciano Federico Pereira, lucianofedericopereira, lucianofedericopereira@users.noreply.github.com, lucianopereira@posteo.es"
-    cmd_parts.extend(["--author-names", author_names])
 
     print()
     print("=" * 60)
@@ -127,15 +114,12 @@ def main() -> None:
             print(f"File size: {size_kb:.1f} KB")
             print()
             print("Features included in this version:")
-            print("  ✓ Circular profile picture with proper spacing")
-            print("  ✓ Taller rounded language progress bars (12px, fully rounded)")
+            print("  ✓ Same layout and palette as the profile resume.svg (960 wide)")
+            print("  ✓ Light/dark theme and fade-in (SVG only)")
             print("  ✓ Transparent background")
-            print("  ✓ Clean text (no emoji icons)")
-            print("  ✓ 14 contribution boxes (11x11px, inline with username)")
-            print("  ✓ Activity colors only (no empty/white boxes)")
+            print("  ✓ 14 contribution boxes for the last complete days, quartile-shaded")
+            print("  ✓ Language bar with top 7 + Others and percentages")
             print("  ✓ Includes private repositories")
-            print("  ✓ Streamlined stats (removed releases/packages)")
-            print("  ✓ Custom colors from your workflow")
             print()
 
             # Try to open the file
@@ -163,7 +147,7 @@ def main() -> None:
                 elif system == "Windows":
                     os.startfile(output_file)  # type: ignore[attr-defined]  # Windows-only
 
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print()
         print("=" * 60)
         print("✗ Error generating stats!")
